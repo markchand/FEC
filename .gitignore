@@ -2,30 +2,4 @@
 .Rhistory
 .RData
 .Ruserdata
-data/2016 House Candidates.xls		
-data/cn.csv
-data/2016 Super PACs.xls			
-data/cn.txt
-data/CandidateSummaryAction.csv		
-data/donations.csv
-data/CandidateSummaryAction_nodollars.csv	
-data/independent-expenditure-nodollars.csv
-data/Ossoff Donors based in TX.xls		
-data/itcont_2018_invalid_dates.csv
-data/TX Donors 2017, maybe.xls		
-data/itcont_2018_invalid_dates.txt
-data/TX_itcont.xlsx				
-data/itoth.csv
-data/TX_itcont_2018_20120521_20170530.xlsx	
-data/itoth.txt
-data/TX_itcont_2018_20170531_20171103.xlsx	
-data/itpas2.csv
-data/TX_itcont_2018_invalid_dates.xlsx	
-data/itpas2.txt
-data/ccl.csv
-data/links.csv
-data/ccl.txt					
-data/nodes.csv
-data/cm.csv				
-data/~$TX_itcont_2018_20120521_20170530.xlsx
-data/cm.txt
+/data_archive

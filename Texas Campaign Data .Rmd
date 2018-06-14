@@ -6,17 +6,58 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE, eval=FALSE, cache = TRUE, message=FALSE, warning=FALSE)
 ```
 
-## R Markdown
+## Where is this data from? 
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+This data all comes from the FEC website, which (as of 14 June 2018) was available [here](https://www.fec.gov/data/advanced/?tab=bulk-data). I used: 
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+* Contributions by individuals, 2013-2014, 2015-2016, 2017-2018
+* Contributions to candidates, 2013-2014, 2015-2016, 2017-2018
+    * "itpas2"
+* Any transaction from one committee to another, 2013-2014, 2015-2016, 2017-2018
+    * "itoth" 
 
-```{r cars}
-summary(cars)
+Together, I believe those represent all of of the publicly available contribution data. Becuase the data sets are so large, I imported them into the RProj and then deleted them from my computer. If you want to recreate this, either start from the RProj or download your own copy from the FEC website. 
+
+```{r packages and data import}
+# Cleaning up 
+# rm(list=setdiff(ls(), c("itcont2018", "itpas2018", "itoth2018")))
+
+# Packages 
+library(tidyverse)
+
+#2017-2018: Contributions by individuals
+itcont2018 <- read.table("data/2017-2018/indiv18/itcont.txt", sep = "|", fill=TRUE, header=FALSE) 
+ind_names <- c("CMTE_ID","AMNDT_IND","RPT_TP","TRANSACTION_PGI","IMAGE_NUM","TRANSACTION_TP","ENTITY_TP","NAME","CITY","STATE","ZIP_CODE","EMPLOYER","OCCUPATION","TRANSACTION_DT","TRANSACTION_AMT","OTHER_ID","TRAN_ID","FILE_NUM","MEMO_CD","MEMO_TEXT","SUB_ID")
+colnames(itcont2018) = ind_names
+head(itcont2018)
+
+itcont2018 %>% 
+  mutate(
+    IMAGE_NUM = as.numeric(IMAGE_NUM),
+    ZIP_CODE = as.numeric(ZIP_CODE),
+    TRANSACTION_AMT = as.numeric(TRANSACTION_AMT),
+    FILE_NUM = as.numeric(FILE_NUM),
+    SUB_ID = as.numeric(SUB_ID)     
+         ) -> itcont2018
+
+itcont2018 %>% 
+  mutate(TRANSACTION_DT = as.date(TRANSACTION_DT)) -> itcont2018
+
+#2017-2018: Contributions [by committees] to candidates
+itpas2018 <- read.table("/Users/markchand/Downloads/itpas2.txt", sep = "|", fill=TRUE, header=FALSE) 
+itpas2names <- c("CMTE_ID","AMNDT_IND","RPT_TP","TRANSACTION_PGI","IMAGE_NUM","TRANSACTION_TP","ENTITY_TP","NAME","CITY","STATE","ZIP_CODE","EMPLOYER","OCCUPATION","TRANSACTION_DT","TRANSACTION_AMT","OTHER_ID","CAND_ID","TRAN_ID","FILE_NUM","MEMO_CD","MEMO_TEXT","SUB_ID")
+colnames(itpas2018) = itpas2names
+head(itpas2018)
+
+#2017-2018: Any transaction from one committee to another
+itoth2018 <- read.table("/Users/markchand/Downloads/itoth.txt", sep = "|", fill=TRUE, header=FALSE) 
+itothnames <- c("CMTE_ID","AMNDT_IND","RPT_TP","TRANSACTION_PGI","IMAGE_NUM","TRANSACTION_TP","ENTITY_TP","NAME","CITY","STATE","ZIP_CODE","EMPLOYER","OCCUPATION","TRANSACTION_DT","TRANSACTION_AMT","OTHER_ID","TRAN_ID","FILE_NUM","MEMO_CD","MEMO_TEXT","SUB_ID")
+colnames(itoth2018) = itothnames
+head(itoth2018)
+
 ```
 
 ## Including Plots
