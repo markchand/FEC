@@ -1,0 +1,183 @@
+---
+title: "Campaign Finance Networks in the US, Part I" 
+author: By Mark Hand 
+output: html_notebook
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+---
+
+## Getting started
+This script generates a the dataframes necessary to map of donations to candidates for US federal office in 2017-2018, according to the US government's Federal Election Commission (FEC). 
+
+### Background 
+Federal law requires that campaigns report any donation over $200. Some notes of caution to the reader: This does not include donations to or expenditures from Super PACs, which have to report political donations but (I think) not non-campaign expenditures , or to 5014c4 organiations, which do not have to (publicly) political donations. It also doesn't include money spent on "issue ads," which don't (legally) qualify as political speech. 
+
+### Data Stuff 
+Anywho, you can get all this data directly from the [FEC website]( http://classic.fec.gov/finance/disclosure/ftpdet.shtml#a2017_2018) or [Mark's Dropbox](https://www.dropbox.com/sh/dtvzgyp4blf3mb3/AAC8OJNTjH3xisLro3sMRHDya?dl=0). I converted each of these .txt files to .csv using Text to Column in Excel. **Be careful here**, as there seem to be more observations in those files than in the direct .txt files I am trying to learn how to read in. This is (almost all) done in [RStudio](https://www.rstudio.com/) using [RMarkdown](http://rmarkdown.rstudio.com/). 
+
+### Getting ready
+If you want to replicate this, you'll need to install R and RStudio, then open [this](https://www.dropbox.com/s/sa5a5vvs76zg6ko/Exercise_5_FEC.Rmd?dl=0) file. Then run the following, replacing `setwd("~/Dropbox/PhD_data/FEC")` with `setwd("Wherever you downloaded that file")`. 
+
+```{r, eval=FALSE}
+setwd("~/Dropbox/PhD_data/FEC")
+library(data.table)
+library(tidyverse)
+library(WriteXLS)
+library(readxl)
+library(readr)
+library(stringr)
+library(igraph)
+library(knitr)
+library(grid)
+library(gridExtra)
+```
+If you're new to RStudio, then you will probably get a bunch of error messages here. If that's the case, you'll need to install each of the packages listed above with commands like `
+install.packages("tidyverse")`. 
+
+## Importing data 
+If you downloaded the Dropbox folder, you should see some .csv files that I created from the .txt files that I downloaded from the FEC website. Start importing and cleaning that data.
+
+### Donations (links)
+This file will become the `links` in our network; it has all the donations in the 2017-2018 cycle, whether that be from an individual donor or another political committee. It includes both <span style="color:red">Republicans</span> and <span style="color:blue">Democrats</span>. **Careful** with the file addresses here; they’ll need to be edited to wherever you downloaded the Dropbox folder. 
+
+```{r, eval=FALSE}
+US1 <- read_csv("~/Dropbox/PhD_data/FEC/itcont_2018_20170531_20171103.csv", col_names=F)
+ind_names <- c("CMTE_ID","AMNDT_IND","RPT_TP","TRANSACTION_PGI","IMAGE_NUM","TRANSACTION_TP","ENTITY_TP","NAME","CITY","STATE","ZIP_CODE","EMPLOYER","OCCUPATION","TRANSACTION_DT","TRANSACTION_AMT","OTHER_ID","TRAN_ID","FILE_NUM","MEMO_CD","MEMO_TEXT","SUB_ID")
+colnames(US1) = ind_names
+US2 <- read_csv("~/Dropbox/PhD_data/FEC/itcont_2018_20120521_20170530.csv", col_names=F)
+colnames(US2) = ind_names
+US3 <- read_csv("~/Dropbox/PhD_data/FEC/itcont_2018_invalid_dates.csv", col_names=F)
+colnames(US3) = ind_names
+donations <- rbind(US1, US2, US3)
+donations$IMAGE_NUM <- as.numeric(donations$IMAGE_NUM)
+donations$ZIP_CODE <- as.numeric(donations$ZIP_CODE)
+donations$TRANSACTION_DT <- as.numeric(donations$TRANSACTION_DT)
+donations$TRANSACTION_AMT <- as.numeric(donations$TRANSACTION_AMT)
+donations$FILE_NUM <- as.numeric(donations$FILE_NUM)
+donations$SUB_ID <- as.numeric(donations$SUB_ID)
+donations %>% 
+  rename("from" = "NAME") -> donations
+
+comtocom <- read_csv("~/Dropbox/PhD_data/FEC/itoth.csv", col_names=F)
+itothnames <- c("CMTE_ID","AMNDT_IND","RPT_TP","TRANSACTION_PGI","IMAGE_NUM","TRANSACTION_TP","ENTITY_TP","NAME","CITY","STATE","ZIP_CODE","EMPLOYER","OCCUPATION","TRANSACTION_DT","TRANSACTION_AMT","OTHER_ID","TRAN_ID","FILE_NUM","MEMO_CD","MEMO_TEXT","SUB_ID")
+colnames(comtocom) = itothnames
+comtocom %>% 
+  rename("from" = "OTHER_ID") -> comtocom
+
+comtocan <- read_csv("~/Dropbox/PhD_data/FEC/itpas2.csv", col_names=F)
+itpas2names <- c("CMTE_ID","AMNDT_IND","RPT_TP","TRANSACTION_PGI","IMAGE_NUM","TRANSACTION_TP","ENTITY_TP","NAME","CITY","STATE","ZIP_CODE","EMPLOYER","OCCUPATION","TRANSACTION_DT","TRANSACTION_AMT","OTHER_ID","CAND_ID","TRAN_ID","FILE_NUM","MEMO_CD","MEMO_TEXT","SUB_ID")
+colnames(comtocan) = itpas2names
+comtocan %>% 
+  rename("from" = "OTHER_ID") -> comtocan
+
+links <- bind_rows(donations, comtocom, comtocan)
+links %>% rename("to" = "CMTE_ID") -> links
+links <- links %>% select(from, to, everything())
+```
+
+### Campaigns, candidates and donors (nodes)
+These data will become the `nodes` in our network map. 
+```{r, eval=FALSE}
+candidates <- read_csv("~/Dropbox/PhD_data/FEC/cn.csv", col_names=F)
+can_col_names <- c("CAND_ID","CAND_NAME","CAND_PTY_AFFILIATION","CAND_ELECTION_YR","CAND_OFFICE_ST","CAND_OFFICE","CAND_OFFICE_DISTRICT","CAND_ICI","CAND_STATUS","CAND_PCC","CAND_ST1","CAND_ST2","CAND_CITY","CAND_ST","CAND_ZIP")
+colnames(candidates) = can_col_names
+
+committees <- read_csv("~/Dropbox/PhD_data/FEC/cm.csv", col_names=F)
+com_col_names <- c("CMTE_ID","CMTE_NM","TRES_NM","CMTE_ST1","CMTE_ST2","CMTE_CITY","CMTE_ST","CMTE_ZIP","CMTE_DSGN","CMTE_TP","CMTE_PTY_AFFILIATION","CMTE_FILING_FREQ","ORG_TP","CONNECTED_ORG_NM","CAND_ID")
+colnames(committees) = com_col_names
+
+recipients <- full_join(candidates, committees)
+
+donors <- donations %>% 
+  select("from","CITY","STATE","ZIP_CODE","EMPLOYER","OCCUPATION") %>% 
+  distinct()
+
+nodes <- bind_rows(recipients, donors)
+nodes <- mutate(nodes, id = rownames(nodes))
+nodes <- nodes %>% select(id, everything())
+```
+
+# Tables and Charts 
+Before we build a graph of that data, let's take a look at where the money is flowing.
+
+```{r}
+kitchensink <- left_join(links, recipients, by = c("to" = "CMTE_ID"))
+```
+
+## A Table 
+Which 2018 Texas House candidates have raised the most money so far? 
+```{r, echo=TRUE}
+kitchensink %>% 
+  filter(CAND_OFFICE_ST=="TX" & CAND_OFFICE=="H") %>%   
+  group_by(CAND_NAME) %>% 
+  mutate(TOTAL = sum(TRANSACTION_AMT)) %>% 
+  select(CAND_NAME, CAND_OFFICE_DISTRICT, CAND_ELECTION_YR, CAND_PTY_AFFILIATION, TOTAL) %>% 
+  distinct() %>% 
+  arrange(desc(TOTAL))
+```
+
+There are a couple of things to notice here: First, it seems unlikely that Chet Edwards is raising money for a 2010 House race. Second, there are some races (like TX-7) where there are multiple candidates raising considerable amounts of money. Third, some unlucky donor gave $15 to the nonexistent House campaign of Senatorial candidate Beto O'Rouke. 
+
+## Two Charts 
+Let's get rid of Chet Edwards and other non-2018 races and create a new dataframe to play with. 
+
+```{r,eval=FALSE}
+kitchensink %>% 
+  filter(CAND_OFFICE_ST=="TX" & CAND_OFFICE=="H" & CAND_ELECTION_YR=="2018") %>%   
+  group_by(CAND_NAME) %>% 
+  mutate(TOTAL = sum(TRANSACTION_AMT)) %>% 
+  select(CAND_NAME, CAND_OFFICE_DISTRICT, CAND_PTY_AFFILIATION, TOTAL) %>% 
+  distinct() %>% 
+  arrange(desc(TOTAL)) -> TX_House
+```
+
+### Chart I
+Which house races are the most expensive so far? 
+
+```{r, echo=TRUE}
+TX_House %>% 
+  group_by(CAND_OFFICE_DISTRICT) %>% 
+  mutate(district_total=(sum(TOTAL))) %>% 
+  select(CAND_NAME, CAND_OFFICE_DISTRICT, CAND_PTY_AFFILIATION, TOTAL, district_total) %>% 
+  arrange(desc(district_total)) -> districts
+
+ggplot(districts, aes(x=reorder(CAND_OFFICE_DISTRICT, district_total), district_total)) + geom_bar(stat="identity") + coord_flip() + theme_minimal() +
+    labs(title="Money raised in 2018 TX House races",
+       caption="Data from www.fec.gov",
+       x="District Number",
+       y="Money raised") -> districts_plot
+
+districts_plot
+```
+I'm not sure why it is that this chart won't reorder the way I want it to; suggestions welcome. 
+
+### Chart II 
+In the most expensive races, which parties' candidates are raising more? 
+
+```{r, echo=TRUE}
+ggplot(subset(districts, district_total>200000)) + 
+  geom_bar(aes(CAND_OFFICE_DISTRICT, TOTAL, fill=CAND_PTY_AFFILIATION), stat="sum") + 
+  coord_flip() + scale_fill_manual(values = c("DEM"="darkblue","REP"="red","UNK"="darkgreen")) +
+  theme_minimal() +
+  labs(title="Money raised in the most expensive \n2018 TX House races",
+    caption="Data from www.fec.gov",
+    x="District Number",
+    y="Money raised") + 
+    guides(fill=guide_legend(title=NULL)) -> parties_plot
+
+parties_plot
+```
+
+Things I'm not sure how to do on the chart above: 
+
+* Eliminate space between bars
+* run `position_dodge()` by party 
+* Get rid of that "n 1" box 
+* Switch from e^ numbers to dollar amounts 
+
+### Two Charts Together 
+Putting these plots together: 
+```{r, echo=TRUE}
+grid.arrange(districts_plot, parties_plot, nrow=1)
+```
+
+In Part II, I'll use the igraph packages to create a graph from this data. At the moment I'm currently stuck on `net <- graph_from_data_frame(d=links, vertices=nodes, directed=T)`.

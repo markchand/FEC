@@ -1,0 +1,112 @@
+---
+title: "FEC Data Project - Mark Hand"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The Center for Responsive Politics publishes http://OpenSecrets.org, one of the most popular sources of FEC data.  Their data, however, come from publicly available data published by the Federal Election Commission. This project attempts to reproduce some of the data presented on OpenSecrets.org using the primary source data provided by the FEC. 
+
+Challenge One: Reproduce one of the summary tables found at: https://www.opensecrets.org/overview/index.php?display=T&type=A&cycle=2016. 
+
+1. Download the CandidateSummaryAction.csv from http://classic.fec.gov/data/CandidateSummary.do?format=csv
+2. In Excel, convert all of the dollar amounts in columns 14-48 to numbers and eliminated the commas
+3. Then import the data into R: 
+
+
+```{r intro, eval=FALSE}
+setwd("~/Google Drive/PhD/Money in Politics/FEC") # Set your working directory to you moved the data  
+library(tidyverse) # If you get an error, first do install.packages("tidyverse")
+library(dplyr)
+library(WriteXLS)
+Candidates <- read_csv("CandidateSummaryAction_nodollars.csv")
+```
+
+According to the metadata from http://classic.fec.gov/finance/disclosure/metadata/metadataforcandidatesummary.shtmloth_com_con, use the following variables: 
+
+1. ind_con: "Sum of the previous two fields (i.e. ind_ite_con and ind_uni_con):
+  ind_ite_con: "Contributions must be itemized (i.e. listing specific information about the donor and the contribution) when the total given to the campaign from a single individual exceeds $200."
+  ind_uni_con: "Total given to the campaign where specific information about the donors is not required because they have not given more than $200."
+2. oth_com_con: "Mostly contributions from PACs, also includes contributions from other candidates. These also must     be itemized regardless of amount"
+3. cas_on_han_clo_of_per: "Ending cash balance on the most recent filing."
+4. tot_con: "Sum of the previous 4 fields (i.e. ind_con, par_com_con, oth_com_con and can_con)"
+5. tot_dis: "Sum of all disbursement categories"
+
+Now, attempting to rebuild the chart of contributions to 2016 House candidates: 
+
+```{r one, eval=FALSE} 
+House <- Candidates %>% filter(can_off=="H")
+HouseGOPandDem <- House %>% filter(can_par_aff=="REP" | can_par_aff=="DEM")
+party <- c("DEM","REP")
+a <- as.data.frame(party)
+names(a)[1] <- "can_par_aff"
+b <- as.data.frame(rbind(nrow(HouseDem  <- House %>% filter(can_par_aff=="DEM")), nrow(HouseGOP <- House %>% filter(can_par_aff=="REP"))))
+names(b)[1] <- "No_of_Cands"
+b <- cbind(a,b)
+HouseGOPandDem %>% 
+  group_by(can_par_aff) %>% 
+  summarise(total_raised=sum(tot_con, na.rm=TRUE)) -> c
+HouseGOPandDem %>% 
+  group_by(can_par_aff) %>% 
+  summarise(total_spent=sum(tot_dis, na.rm=TRUE)) -> d
+HouseGOPandDem %>% 
+  group_by(can_par_aff) %>% 
+  summarise(cash_on_hand=sum(cas_on_han_clo_of_per, na.rm=TRUE)) -> e
+HouseGOPandDem %>% 
+  group_by(can_par_aff) %>% 
+  summarise(total_from_PACs=sum(oth_com_con, na.rm=TRUE)) -> f
+HouseGOPandDem %>% 
+  group_by(can_par_aff) %>% 
+  summarise(total_from_Indivs=sum(ind_con, na.rm=TRUE)) -> g
+h <- cbind(a,b,c,d,e,f,g)
+```
+
+Now that you're exhausted from trying to learn that much R that fast, export back to Excel to finish up: 
+
+```{r one two, eval=FALSE}
+library(WriteXLS)
+WriteXLS(h, ExcelFileName = "2016 House Candidates.xls")
+```
+
+And voila! 
+
+This took me hours, not because of the FEC data but becuase I'm still learning how to use R. In general, this exercise underscored the point that the data reported by Open Secrets seems not to line up at all with the data available on the FEC website. 
+
+
+
+
+Challenge Two: Reproduce the numbers from the top four "Super" PACs from the 2016 election cycle: https://www.opensecrets.org/outsidespending/summ.php?cycle=2016&chrt=V&disp=O&type=S. 
+
+1. Download the .csv file for 2016 Independent Expenditures. Go to this site: http://classic.fec.gov/data/IndependentExpenditure.do?format=html&election_yr=2016, click on the icon labeled "CSV."
+2. Open that file in Excel and convert all of the dollar amounts in columns 14-48 to numbers and eliminated the commas. 
+3. Import that dataset to R:
+
+
+```{r two, eval=FALSE}
+Ind_Expenditures <- read_csv("independent-expenditure-nodollars.csv")
+```
+
+According to the metadata from http://classic.fec.gov/finance/disclosure/metadata/metadataforindependentexpenditures.shtml, use the following variables: 
+1. spe_nam: "Name of committee, individual or group making expenditure"
+2. exp_amo: "Dollar amount of specific expenditure"
+3. agg_amo: "Total amount expended during the calendar year, per election, per office sought." A note on this: Given that this is the only other dollar amount present in the dataset that OpenSecrets could be calling "Amount Raised", we'll call this "maybe_raised" until Monday. 
+
+... then export to Excel for final cleanup. 
+
+```{r two two, eval=FALSE}
+Ind_Expenditures %>% 
+  group_by(spe_nam) %>% 
+  summarise(total_spent = sum(exp_amo, na.rm=TRUE),maybe_raised = sum(agg_amo, na.rm=TRUE)) -> Amounts 
+
+Ind_Expenditures %>% 
+  group_by(spe_nam) %>% 
+  select(spe_nam, can_par_aff, sup_opp) -> View
+
+Amounts %>% top_n(5, total_spent) -> TopAmounts
+
+WriteXLS(TopAmounts, ExcelFileName = "2016 Super PACs.xls")
+```
+
+Some reflections: First, the expenditures here line up a *bit* better with the OpenSecrets data than those from the first assignment, but it's still unclear to me how OpenSecrets went from the FEC data to this chart. 
