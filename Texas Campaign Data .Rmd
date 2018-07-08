@@ -189,7 +189,7 @@ rm(can.names, com.names, ind_names, links.names)
 ## God Save Texas 
 Let's take a look first at the folks running in Texas, and how much money they've raised from individuals: 
 
-```{r Texas}
+```{r creating Texas databases}
 # Creating Texas databases 
 all2018 %>% 
   filter(CAND_OFFICE_ST=="TX" | STATE =="TX") -> TX2018
@@ -197,9 +197,24 @@ all2018 %>%
 all2016 %>% 
   filter(CAND_OFFICE_ST=="TX" | STATE =="TX") -> TX2016
 
+TX2018 %>% 
+  mutate(CAND_ZIP = as.factor(CAND_ZIP)) -> TX2018
+
+TX2016 %>% 
+  mutate(CAND_ZIP = as.factor(CAND_ZIP)) -> TX2016
+
 # Removing larger dataframes 
 rm(all2016, all2018)
 
+# Joining (http://zevross.com/blog/2014/08/05/using-the-r-function-anti_join-to-find-unmatched-records/) 
+
+TX2018.new <- anti_join(TX2018, TX2016, by = "NAME")
+TX2016.untapped <- anti_join(TX2016, TX2018, by = "NAME")
+
+# Next steps: Anti_join seems to have done what I need it to; need to figure out the relationship between this and unique(). 
+```
+
+```{r Texas}
 # Checking House candidates
 TX2018 %>% 
   group_by(CAND_NAME) %>% 
